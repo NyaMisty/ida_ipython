@@ -1,4 +1,3 @@
-from __future__ import print_function
 import traceback
 import os
 import sys
@@ -58,18 +57,12 @@ class IDAIPython(idaapi.plugin_t):
     flags = idaapi.PLUGIN_FIX
     comment = ""
     help = ""
+    connection_file = None
 
-    def init(self):
-
-        self.kernel_app = None
-        self.qtconsole_action = None
-        self.menu_items = []
-        self.qtconsole_processes = []
-
+    def start_kernel(self):
         argv = None
-        connection_file = os.environ.get("JUPYTER_CONNECTION", None)
-        if connection_file:
-            argv = ['-f', connection_file]
+        if self.connection_file:
+            argv = ['-f', self.connection_file]
 
         kernel_iteration = self.start(argv)
 
@@ -79,15 +72,31 @@ class IDAIPython(idaapi.plugin_t):
 
         self.timer = idaapi.register_timer(int(1000 * self.kernel_app.kernel._poll_interval), timer_callback)
 
+
+    def init(self):
+        
+        self.kernel_app = None
+        self.qtconsole_action = None
+        self.menu_items = []
+        self.qtconsole_processes = []
+        
+        self.connection_file = os.environ.get("JUPYTER_CONNECTION", None)
+        if self.connection_file:
+            self.start_kernel()
+        
         return idaapi.PLUGIN_KEEP
 
     def run(self, args):
-        pass
+        if not self.kernel_app:
+            self.start_kernel()
+        else:
+            print "Kernel already started!"
 
     def term(self):
-        idaapi.unregister_timer(self.timer)
-        self.kill_qtconsoles()
-        self.remove_menus()
+        if self.kernel_app:
+            idaapi.unregister_timer(self.timer)
+            self.kill_qtconsoles()
+            self.remove_menus()
 
     def embed_kernel(self, module=None, local_ns=None, **kwargs):
         """Embed and start an IPython kernel in a given scope.
@@ -172,8 +181,8 @@ class IDAIPython(idaapi.plugin_t):
                                            close_fds=True)
                 self.qtconsole_processes.append(process)
             else:
-                print("Error: No kernel defined!")
-        except Exception as e:
+                print "Error: No kernel defined!"
+        except Exception, e:
             traceback.print_exc()
 
     def kill_qtconsoles(self):
@@ -219,7 +228,7 @@ class IDAIPython(idaapi.plugin_t):
                 self.add_idaipython_menu()
 
                 return kernel_iteration
-        except Exception as e:
+        except Exception, e:
             traceback.print_exc()
             raise
 
